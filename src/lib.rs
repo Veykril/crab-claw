@@ -243,10 +243,9 @@ fn gen_cross_hull<V: Vertex>(
             .then_with(|| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal))
     });
 
-    let hull = monotone_chain(mapped);
+    let mut hull = monotone_chain(mapped);
 
-    let tri_count = (hull.len() - 2) * 3;
-    let mut triangles = Vec::with_capacity(tri_count);
+    let mut triangles = Vec::with_capacity(hull.len() - 2);
 
     let BoundingBox {
         x,
@@ -254,24 +253,21 @@ fn gen_cross_hull<V: Vertex>(
         width,
         height,
     } = bounding_box;
-    // FIXME: const generic slice functions should be able to help here
-    for vertices in hull.windows(3) {
-        // const generics would clean up this mess as well
-        let [(a, uva), (b, uvb), (c, uvc)] =
-            if let [(ref a, uva), (ref b, uvb), (ref c, uvc), ..] = *vertices {
-                [(a.pos(), uva), (b.pos(), uvb), (c.pos(), uvc)]
-            } else {
-                unreachable!()
-            };
-        let uva = (uva - Vec2::new(x, y)) / Vec2::new(width, height);
-        let uvb = (uvb - Vec2::new(x, y)) / Vec2::new(width, height);
-        let uvc = (uvc - Vec2::new(x, y)) / Vec2::new(width, height);
-        let triangle = Triangle::new(
-            V::new(a, tb.map(uva), plane_normal),
-            V::new(b, tb.map(uvb), plane_normal),
-            V::new(c, tb.map(uvc), plane_normal),
-        );
-        triangles.push(triangle);
+    let max = Vec2::new(width, height);
+    let min = Vec2::new(x, y);
+    let p = {
+        let (v, uv) = hull.pop().unwrap();
+        V::new(v.pos(), tb.map((uv - min) / max), plane_normal)
+    };
+    // FIXME: const generic slice functions
+    for vertices in hull.windows(2) {
+        let &(ref a, uva) = &vertices[0];
+        let &(ref b, uvb) = &vertices[1];
+        triangles.push(Triangle::new(
+            V::new(a.pos(), tb.map((uva - min) / max), plane_normal),
+            V::new(b.pos(), tb.map((uvb - min) / max), plane_normal),
+            p.clone(),
+        ));
     }
 
     Some(triangles)
