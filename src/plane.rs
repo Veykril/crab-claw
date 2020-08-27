@@ -43,7 +43,7 @@ impl Plane {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Side {
+    On,
     Above,
     Below,
-    On,
 }

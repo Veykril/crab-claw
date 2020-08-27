@@ -1,11 +1,12 @@
 use crate::{plane::Side, Plane, Vertex, EPSILON};
 use arrayvec::ArrayVec;
 
+/// Result of an triangle intersection
 pub(crate) struct TriangleSplit<V> {
     /// split points
     pub points: [V; 2],
     /// new triangles, can be either 2 or 3
-    pub hull: ArrayVec<[Triangle<V>; 3]>,
+    pub hull: ArrayVec<[Triangle<V>; 3]>, // this seems weird, is there a better way?
     /// index into hull seperating lower from upper hull [lower; higher]
     pub lower_split: usize,
 }
@@ -22,6 +23,7 @@ impl<V: Vertex> Triangle<V> {
         Triangle { a, b, c }
     }
 
+    /// Reverses the winding order of this triangle
     pub(crate) fn reverse_winding(&mut self) {
         std::mem::swap(&mut self.b, &mut self.c);
     }
@@ -38,11 +40,14 @@ pub(crate) fn intersect_triangle<V: Vertex>(
     plane: Plane,
     triangle: Triangle<V>,
 ) -> Option<TriangleSplit<V>> {
+    // TODO: could return a Result<TriangleSplit<V>, Side> instead, returning the side the triangle is on
+    // would allow to remove the repeated checks in slice_convex
+    // also optimize this in general, lots of branching
     let side_a = plane.classify_side(triangle.a.pos());
     let side_b = plane.classify_side(triangle.b.pos());
     let side_c = plane.classify_side(triangle.c.pos());
 
-    // degenerate
+    // triangle is either fully on the plane or not touching the plan
     if side_a == side_b && side_b == side_c {
         return None;
     }

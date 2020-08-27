@@ -8,7 +8,7 @@ fn main() {
     let cone = genmesh::generators::IcoSphere::subdivide(3);
     let f: Vec<Triangle<Vertex>> =
         vertex_to_triangle(cone.triangulate().vertices().map(Into::into)).collect();
-    let s = crab_claw::slice(
+    let s = crab_claw::slice_convex(
         f,
         crab_claw::Plane::from_pos_normal(Vec3::zero(), Vec3::new(1.0, 0.2, 0.0)),
         Default::default(),

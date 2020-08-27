@@ -2,19 +2,15 @@ mod triangle;
 pub use self::triangle::Triangle;
 
 mod math;
+mod triangulate;
 use self::math::{Vec2, Vec3};
 mod plane;
 pub use self::plane::Plane;
 use self::plane::Side;
 use triangle::intersect_triangle;
+use triangulate::triangulate;
 
 const EPSILON: f32 = 1e-7;
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum HullKind {
-    Upper,
-    Lower,
-}
 
 pub fn vertex_to_triangle<'a, V: Vertex, I: IntoIterator<Item = V> + 'a>(
     i: I,
@@ -35,6 +31,7 @@ pub fn triangle_to_vertex<'a, V: Vertex + 'a, I: IntoIterator<Item = Triangle<V>
         .flat_map(|triangle| vec![triangle.a, triangle.b, triangle.c])
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct TextureBounds {
     x_min: f32,
     y_min: f32,
@@ -43,11 +40,22 @@ pub struct TextureBounds {
 }
 
 impl TextureBounds {
-    fn map(&self, uv: Vec2) -> Vec2 {
-        Vec2::new(
-            uv.x * (self.x_max - self.x_min) + self.x_min,
-            uv.y * (self.y_max - self.y_min) + self.y_min,
-        )
+    pub fn new(x_min: f32, y_min: f32, x_max: f32, y_max: f32) -> Self {
+        TextureBounds {
+            x_min,
+            y_min,
+            x_max,
+            y_max,
+        }
+    }
+
+    /// returns a function that maps a vec2 in range [0;1] to the bounds of this texture
+    fn mapper(&self) -> impl Fn(Vec2) -> Vec2 {
+        let diffx = self.x_max - self.x_min;
+        let diffy = self.y_max - self.y_min;
+        let x_min = self.x_min;
+        let y_min = self.y_min;
+        move |uv| Vec2::new(uv.x * diffx + x_min, uv.y * diffy + y_min)
     }
 }
 
@@ -67,13 +75,14 @@ pub struct SubMesh<V> {
     pub cross_section: Vec<Triangle<V>>,
 }
 
-pub fn slice<V: Vertex>(
+pub fn slice_convex<V: Vertex>(
     triangles: impl IntoIterator<Item = Triangle<V>>,
     plane: Plane,
     texture_bounds: TextureBounds,
 ) -> Option<(SubMesh<V>, SubMesh<V>)> {
-    let mut upper = vec![];
-    let mut lower = vec![];
+    let triangles = triangles.into_iter();
+    let mut upper = Vec::with_capacity(triangles.size_hint().0);
+    let mut lower = Vec::with_capacity(triangles.size_hint().0);
     let mut cross = vec![];
 
     for triangle in triangles {
@@ -86,19 +95,16 @@ pub fn slice<V: Vertex>(
             let side_a = plane.classify_side(triangle.a.pos());
             let side_b = plane.classify_side(triangle.b.pos());
             let side_c = plane.classify_side(triangle.c.pos());
-            // what is this????
-            let side = if side_a != Side::On { side_a } else { Side::On };
-            let side = if side_b != Side::On {
-                debug_assert!(side == Side::On || side == side_b);
+
+            // the plane didnt intersect this triangle, figure out into what hull to put it
+            let side = if side_a != Side::On {
+                side_a
+            } else if side_b != Side::On {
                 side_b
-            } else {
-                side
-            };
-            let side = if side_c != Side::On {
-                debug_assert!(side == Side::On || side_c == side_b);
+            } else if side_c != Side::On {
                 side_c
             } else {
-                side
+                Side::On
             };
             if let Side::Above | Side::On = side {
                 upper.push(triangle);
@@ -109,17 +115,22 @@ pub fn slice<V: Vertex>(
     }
 
     if !(upper.is_empty() || lower.is_empty()) {
-        let cross = gen_cross_hull(cross, plane, &texture_bounds).unwrap_or_default();
-        let (upper, upper_cross) = create_hull(upper, &cross, HullKind::Upper);
-        let (lower, lower_cross) = create_hull(lower, &cross, HullKind::Lower);
+        let cross = triangulate(cross, plane, &texture_bounds)
+            // only happens if we didnt gather enough vertices to form a triangle
+            .unwrap_or_default();
+        let mut cross_lower = cross.clone();
+        cross_lower.iter_mut().for_each(|trig| {
+            trig.flip_normals(); // TODO: check whether flipping here is correct
+            trig.reverse_winding();
+        });
         Some((
             SubMesh {
                 hull: upper,
-                cross_section: upper_cross,
+                cross_section: cross,
             },
             SubMesh {
                 hull: lower,
-                cross_section: lower_cross,
+                cross_section: cross_lower,
             },
         ))
     } else {
@@ -128,151 +139,7 @@ pub fn slice<V: Vertex>(
     }
 }
 
-fn create_hull<V: Vertex>(
-    hull: Vec<Triangle<V>>,
-    cross: &[Triangle<V>],
-    hull_kind: HullKind,
-) -> (Vec<Triangle<V>>, Vec<Triangle<V>>) {
-    let mut cross_hull = cross.to_vec();
-    if hull_kind == HullKind::Lower {
-        cross_hull.iter_mut().for_each(|trig| {
-            trig.flip_normals(); // TODO: check normals
-            trig.reverse_winding();
-        });
-    }
-    (hull, cross_hull)
-}
-
-/// montone chain algorithm, assumes vertices are ordered by the second tuple element
-fn monotone_chain<V: Clone>(vertices: Vec<(V, Vec2)>) -> Vec<(V, Vec2)> {
-    fn cross_2d(a: Vec2, b: Vec2, c: Vec2) -> f32 {
-        (a.x - b.x) * (b.y - c.y) - (b.x - c.x) * (a.y - b.y)
-    }
-
-    let mut hull: Vec<(_, _)> = Vec::with_capacity(vertices.len() / 2);
-    // lower
-    for mapped in vertices.iter().cloned() {
-        while {
-            let len = hull.len();
-            len >= 2 && cross_2d(hull[len - 2].1, hull[len - 1].1, mapped.1) <= 0.0
-        } {
-            hull.pop();
-        }
-        hull.push(mapped)
-    }
-
-    let offset = hull.len() + 2;
-    for mapped in vertices.into_iter().rev() {
-        while {
-            let len = hull.len();
-            len >= offset && cross_2d(hull[len - 2].1, hull[len - 1].1, mapped.1) <= 0.0
-        } {
-            hull.pop();
-        }
-        hull.push(mapped)
-    }
-    hull.pop(); // repeated elements
-    hull.remove(offset - 2); // repeated elements
-    debug_assert!(hull.len() >= 3);
-    hull
-}
-
-struct BoundingBox {
-    x: f32,
-    y: f32,
-    width: f32,
-    height: f32,
-}
-
-// Map the vertices onto the cutting plane, calculating the bounding box
-fn map_to_2d_with_bb<V: Vertex>(plane: Plane, vertices: Vec<V>) -> (BoundingBox, Vec<(V, Vec2)>) {
-    // generate the plane from the normal
-    let normal = plane.normal();
-    let mut plane_u = normal.cross(Vec3::new(1.0, 1.0, 0.0)).normalized();
-    // our chosen vector for the cross product might be linearly dependent on the plane normal
-    // so choose a different vector that is linear independent to our former chosen one if the cross product didnt work out
-    if !plane_u.as_array().iter().copied().sum::<f32>().is_normal() {
-        plane_u = normal.cross(Vec3::new(0.0, 1.0, 1.0));
-    }
-    let plane_v = plane_u.cross(normal);
-
-    let mut minx = f32::MAX;
-    let mut miny = f32::MAX;
-    let mut maxx = f32::MIN;
-    let mut maxy = f32::MIN;
-
-    let mapped = vertices
-        .into_iter()
-        .map(|vertex| {
-            let v2 = Vec2::new(vertex.pos().dot(plane_u), vertex.pos().dot(plane_v));
-            minx = minx.min(v2.x);
-            miny = miny.min(v2.y);
-            maxx = maxx.max(v2.x);
-            maxy = maxy.max(v2.y);
-            (vertex, v2)
-        })
-        .collect::<Vec<_>>();
-    (
-        BoundingBox {
-            x: minx,
-            y: miny,
-            width: maxx - minx,
-            height: maxy - miny,
-        },
-        mapped,
-    )
-}
-
-/// generate the cross section mesh from the intersection points
-fn gen_cross_hull<V: Vertex>(
-    vertices: Vec<V>,
-    plane: Plane,
-    tb: &TextureBounds,
-) -> Option<Vec<Triangle<V>>> {
-    if vertices.len() < 3 {
-        return None;
-    }
-
-    let plane_normal = plane.normal();
-    let (bounding_box, mut mapped) = map_to_2d_with_bb(plane, vertices);
-
-    // sort by 2d projection x coord, and y coord if equal
-    mapped.sort_by(|(_, a), (_, b)| {
-        a.x.partial_cmp(&b.x)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal))
-    });
-
-    let mut hull = monotone_chain(mapped);
-
-    let mut triangles = Vec::with_capacity(hull.len() - 2);
-
-    let BoundingBox {
-        x,
-        y,
-        width,
-        height,
-    } = bounding_box;
-    let max = Vec2::new(width, height);
-    let min = Vec2::new(x, y);
-    let p = {
-        let (v, uv) = hull.pop().unwrap();
-        V::new(v.pos(), tb.map((uv - min) / max), plane_normal)
-    };
-    // FIXME: const generic slice functions
-    for vertices in hull.windows(2) {
-        let &(ref a, uva) = &vertices[0];
-        let &(ref b, uvb) = &vertices[1];
-        triangles.push(Triangle::new(
-            V::new(a.pos(), tb.map((uva - min) / max), plane_normal),
-            V::new(b.pos(), tb.map((uvb - min) / max), plane_normal),
-            p.clone(),
-        ));
-    }
-
-    Some(triangles)
-}
-
+/// Trait to be implemented by vertices for slicing
 pub trait Vertex: Clone + Sized {
     fn new_interpolated(a: &Self, b: &Self, t: f32) -> Self;
 
