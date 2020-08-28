@@ -1,4 +1,8 @@
-use crate::{plane::Side, Plane, Vertex, EPSILON};
+use crate::{
+    math::{dot_v3, sub_v3},
+    plane::Side,
+    Plane, Vertex, EPSILON,
+};
 use arrayvec::ArrayVec;
 
 /// Result of an triangle intersection
@@ -231,13 +235,13 @@ pub(crate) fn intersect_triangle<V: Vertex>(
 }
 
 fn intersect_line<V: Vertex>(plane: Plane, a: &V, b: &V) -> Option<V> {
-    let line = b.pos() - a.pos();
+    let line = sub_v3(b.pos(), a.pos());
 
-    let ln = plane.normal().dot(line);
+    let ln = dot_v3(plane.normal(), line);
     if ln == 0.0 {
         None
     } else {
-        let t = (plane.dist() - plane.normal().dot(a.pos())) / ln;
+        let t = (plane.dist() - dot_v3(plane.normal(), a.pos())) / ln;
         // clamp between ~0.0 and ~1.0 since we only want the segment
         if t >= -EPSILON && t <= (1.0 + EPSILON) {
             Some(V::new_interpolated(a, b, t))
@@ -246,20 +250,3 @@ fn intersect_line<V: Vertex>(plane: Plane, a: &V, b: &V) -> Option<V> {
         }
     }
 }
-
-// fn intersect_line(plane: Plane, a: Vec3, b: Vec3) -> Option<Vec3> {
-//     let line = b - a;
-
-//     let ln = plane.normal.dot(line);
-//     if ln == 0.0 {
-//         None
-//     } else {
-//         let t = (plane.dist - plane.normal.dot(a)) / ln;
-//         // clamp between ~0.0 and ~1.0 since we only want the segment
-//         if t >= -EPSILON && t <= (1.0 + EPSILON) {
-//             Some(a + t * line)
-//         } else {
-//             None
-//         }
-//     }
-// }

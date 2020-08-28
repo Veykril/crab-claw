@@ -1,14 +1,15 @@
 mod triangle;
+use self::triangle::intersect_triangle;
 pub use self::triangle::Triangle;
 
 mod math;
-mod triangulate;
-use self::math::{Vec2, Vec3};
+
 mod plane;
 pub use self::plane::Plane;
 use self::plane::Side;
-use triangle::intersect_triangle;
-use triangulate::triangulate;
+
+mod triangulate;
+use self::triangulate::triangulate;
 
 const EPSILON: f32 = 1e-7;
 
@@ -50,12 +51,12 @@ impl TextureBounds {
     }
 
     /// returns a function that maps a vec2 in range [0;1] to the bounds of this texture
-    fn mapper(&self) -> impl Fn(Vec2) -> Vec2 {
+    fn mapper(&self) -> impl Fn([f32; 2]) -> [f32; 2] {
         let diffx = self.x_max - self.x_min;
         let diffy = self.y_max - self.y_min;
         let x_min = self.x_min;
         let y_min = self.y_min;
-        move |uv| Vec2::new(uv.x * diffx + x_min, uv.y * diffy + y_min)
+        move |[x, y]| [x * diffx + x_min, y * diffy + y_min]
     }
 }
 
@@ -143,9 +144,9 @@ pub fn slice_convex<V: Vertex>(
 pub trait Vertex: Clone + Sized {
     fn new_interpolated(a: &Self, b: &Self, t: f32) -> Self;
 
-    fn new(pos: Vec3, uv: Vec2, normal: Vec3) -> Self;
+    fn new(pos: [f32; 3], uv: [f32; 2], normal: [f32; 3]) -> Self;
 
-    fn pos(&self) -> Vec3;
+    fn pos(&self) -> [f32; 3];
 
     fn flip_normal(&mut self);
 }

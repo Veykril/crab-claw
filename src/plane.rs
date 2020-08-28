@@ -1,26 +1,27 @@
-use crate::math::Vec3;
-use crate::EPSILON;
+use crate::{math::dot_v3, EPSILON};
 
 #[derive(Copy, Clone)]
 pub struct Plane {
-    normal: Vec3,
+    normal: [f32; 3],
     dist: f32,
 }
 
 impl Plane {
-    pub fn new(normal: Vec3, dist: f32) -> Self {
+    #[inline(always)]
+    pub fn new(normal: [f32; 3], dist: f32) -> Self {
         Plane { normal, dist }
     }
 
-    pub fn from_pos_normal(pos: Vec3, normal: Vec3) -> Self {
+    #[inline(always)]
+    pub fn from_pos_normal(pos: [f32; 3], normal: [f32; 3]) -> Self {
         Plane {
             normal,
-            dist: normal.dot(pos),
+            dist: dot_v3(normal, pos),
         }
     }
 
-    pub fn classify_side(&self, point: Vec3) -> Side {
-        let res = self.normal.dot(point) - self.dist;
+    pub fn classify_side(&self, point: [f32; 3]) -> Side {
+        let res = dot_v3(self.normal, point) - self.dist;
         if res < -EPSILON {
             Side::Below
         } else if res > EPSILON {
@@ -36,7 +37,7 @@ impl Plane {
     }
 
     #[inline(always)]
-    pub fn normal(&self) -> Vec3 {
+    pub fn normal(&self) -> [f32; 3] {
         self.normal
     }
 }

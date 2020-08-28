@@ -2,7 +2,6 @@ use crab_claw::{triangle_to_vertex, vertex_to_triangle, Triangle};
 use genmesh::Triangulate;
 use genmesh::Vertices;
 use std::{fs, io::Write, mem};
-use ultraviolet::Vec3;
 
 fn main() {
     let cone = genmesh::generators::IcoSphere::subdivide(3);
@@ -10,7 +9,7 @@ fn main() {
         vertex_to_triangle(cone.triangulate().vertices().map(Into::into)).collect();
     let s = crab_claw::slice_convex(
         f,
-        crab_claw::Plane::from_pos_normal(Vec3::zero(), Vec3::new(1.0, 0.2, 0.0)),
+        crab_claw::Plane::from_pos_normal([0.0; 3], [1.0, 0.2, 0.0]),
         Default::default(),
     )
     .unwrap();
@@ -27,29 +26,28 @@ struct Vertex {
     normal: [f32; 3],
 }
 
-impl Vertex {
-    fn normal(&self) -> ultraviolet::Vec3 {
-        ultraviolet::Vec3::from(self.normal)
-    }
-}
-
 impl crab_claw::Vertex for Vertex {
     fn new_interpolated(a: &Self, b: &Self, t: f32) -> Self {
+        let [ax, ay, az] = a.pos();
+        let [bx, by, bz] = b.pos();
+        let [anx, any, anz] = a.normal;
+        let [bnx, bny, bnz] = b.normal;
         Vertex {
-            position: *(a.pos() + t * (b.pos() - a.pos())).as_array(),
-            normal: *(a.normal() + t * (b.normal() - a.normal())).as_array(),
+            position: [ax + t * (bx - ax), ay + t * (by - ay), az + t * (bz - az)],
+            normal: [
+                anx + t * (bnx - anx),
+                any + t * (bny - any),
+                anz + t * (bnz - anz),
+            ],
         }
     }
 
-    fn new(pos: ultraviolet::Vec3, _: ultraviolet::Vec2, normal: ultraviolet::Vec3) -> Self {
-        Vertex {
-            position: *pos.as_array(),
-            normal: *normal.as_array(),
-        }
+    fn new(position: [f32; 3], _: [f32; 2], normal: [f32; 3]) -> Self {
+        Vertex { position, normal }
     }
 
-    fn pos(&self) -> ultraviolet::Vec3 {
-        ultraviolet::Vec3::from(self.position)
+    fn pos(&self) -> [f32; 3] {
+        self.position
     }
 
     fn flip_normal(&mut self) {
