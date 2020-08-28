@@ -43,6 +43,7 @@ pub struct TextureBounds {
 }
 
 impl TextureBounds {
+    #[inline]
     pub fn new(x_min: f32, y_min: f32, x_max: f32, y_max: f32) -> Self {
         TextureBounds {
             x_min,
@@ -53,6 +54,7 @@ impl TextureBounds {
     }
 
     /// returns a function that maps a vec2 in range [0;1] to the bounds of this texture
+    #[inline]
     fn mapper(&self) -> impl Fn([f32; 2]) -> [f32; 2] {
         let diffx = self.x_max - self.x_min;
         let diffy = self.y_max - self.y_min;
@@ -63,6 +65,7 @@ impl TextureBounds {
 }
 
 impl Default for TextureBounds {
+    #[inline]
     fn default() -> Self {
         TextureBounds {
             x_min: 0.0,
