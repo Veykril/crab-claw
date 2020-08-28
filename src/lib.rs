@@ -92,11 +92,10 @@ pub fn slice_convex<V: Vertex + Clone>(
     let mut cross = vec![];
 
     for triangle in triangles {
-        if let Some(mut split) = intersect_triangle(plane, triangle.clone()) {
-            upper.extend(split.hull.drain(split.lower_split..));
-            lower.extend(split.hull);
+        if let Some((points, split)) = intersect_triangle(plane, triangle.clone()) {
+            split.append_to(&mut lower, &mut upper);
             // FIXME: IntoIter for Arrays when
-            cross.extend(split.points.iter().cloned());
+            cross.extend(points.iter().cloned());
         } else {
             let side_a = plane.classify_side(triangle.a.pos());
             let side_b = plane.classify_side(triangle.b.pos());

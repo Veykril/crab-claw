@@ -1,3 +1,3 @@
 # Crab Claw
 
-A port of [Ezy-Slice](https://github.com/DavidArayan/ezy-slice) to rust.
+A convex mesh slicing library for rust based on [Ezy-Slice](https://github.com/DavidArayan/ezy-slice) with zero-dependencies.
