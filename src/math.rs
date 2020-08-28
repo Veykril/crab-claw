@@ -14,6 +14,11 @@ pub fn sub_v3([lhs_x, lhs_y, lhs_z]: [f32; 3], [rhs_x, rhs_y, rhs_z]: [f32; 3]) 
 }
 
 #[inline]
+pub fn negate_v3([x, y, z]: [f32; 3]) -> [f32; 3] {
+    [-x, -y, -z]
+}
+
+#[inline]
 pub fn dot_v3([lhs_x, lhs_y, lhs_z]: [f32; 3], [rhs_x, rhs_y, rhs_z]: [f32; 3]) -> f32 {
     lhs_x * rhs_x + lhs_y * rhs_y + lhs_z * rhs_z
 }
@@ -41,4 +46,16 @@ pub fn magnitude(v: [f32; 3]) -> f32 {
 pub fn normalized([x, y, z]: [f32; 3]) -> [f32; 3] {
     let mag = magnitude([x, y, z]);
     [x / mag, y / mag, z / mag]
+}
+
+/// Inprecise liner interpolation.
+#[inline]
+pub fn lerp3([x, y, z]: [f32; 3], [x2, y2, z2]: [f32; 3], t: f32) -> [f32; 3] {
+    [x + t * (x2 - x), y + t * (y2 - y), z + t * (z2 - z)]
+}
+
+/// Inprecise liner interpolation.
+#[inline]
+pub fn lerp2([x, y, z]: [f32; 3], [x2, y2, z2]: [f32; 3], t: f32) -> [f32; 3] {
+    [x + t * (x2 - x), y + t * (y2 - y), z + t * (z2 - z)]
 }

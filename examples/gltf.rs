@@ -28,17 +28,9 @@ struct Vertex {
 
 impl crab_claw::Vertex for Vertex {
     fn new_interpolated(a: &Self, b: &Self, t: f32) -> Self {
-        let [ax, ay, az] = a.pos();
-        let [bx, by, bz] = b.pos();
-        let [anx, any, anz] = a.normal;
-        let [bnx, bny, bnz] = b.normal;
         Vertex {
-            position: [ax + t * (bx - ax), ay + t * (by - ay), az + t * (bz - az)],
-            normal: [
-                anx + t * (bnx - anx),
-                any + t * (bny - any),
-                anz + t * (bnz - anz),
-            ],
+            position: crab_claw::lerp3(a.pos(), b.pos(), t),
+            normal: crab_claw::lerp3(a.normal, b.normal, t),
         }
     }
 
@@ -48,10 +40,6 @@ impl crab_claw::Vertex for Vertex {
 
     fn pos(&self) -> [f32; 3] {
         self.position
-    }
-
-    fn flip_normal(&mut self) {
-        self.normal = [-self.normal[0], -self.normal[1], -self.normal[2]];
     }
 }
 

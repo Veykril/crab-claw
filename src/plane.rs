@@ -1,4 +1,5 @@
-use crate::{math::dot_v3, EPSILON};
+use crate::math::dot_v3;
+use crate::EPSILON;
 
 #[derive(Copy, Clone)]
 pub struct Plane {

@@ -3,6 +3,7 @@ use self::triangle::intersect_triangle;
 pub use self::triangle::Triangle;
 
 mod math;
+pub use self::math::{lerp2, lerp3};
 
 mod plane;
 pub use self::plane::Plane;
@@ -29,6 +30,7 @@ pub fn triangle_to_vertex<'a, V: Vertex + 'a, I: IntoIterator<Item = Triangle<V>
     i: I,
 ) -> impl Iterator<Item = V> + 'a {
     i.into_iter()
+        // FIXME: IntoIter for Arrays when
         .flat_map(|triangle| vec![triangle.a, triangle.b, triangle.c])
 }
 
@@ -76,7 +78,7 @@ pub struct SubMesh<V> {
     pub cross_section: Vec<Triangle<V>>,
 }
 
-pub fn slice_convex<V: Vertex>(
+pub fn slice_convex<V: Vertex + Clone>(
     triangles: impl IntoIterator<Item = Triangle<V>>,
     plane: Plane,
     texture_bounds: TextureBounds,
@@ -116,22 +118,18 @@ pub fn slice_convex<V: Vertex>(
     }
 
     if !(upper.is_empty() || lower.is_empty()) {
-        let cross = triangulate(cross, plane, &texture_bounds)
+        let (lower_cross, upper_cross) = triangulate(cross, plane, &texture_bounds)
             // only happens if we didnt gather enough vertices to form a triangle
             .unwrap_or_default();
-        let mut cross_lower = cross.clone();
-        cross_lower.iter_mut().for_each(|trig| {
-            trig.flip_normals(); // TODO: check whether flipping here is correct
-            trig.reverse_winding();
-        });
+
         Some((
             SubMesh {
                 hull: upper,
-                cross_section: cross,
+                cross_section: upper_cross,
             },
             SubMesh {
                 hull: lower,
-                cross_section: cross_lower,
+                cross_section: lower_cross,
             },
         ))
     } else {
@@ -141,12 +139,33 @@ pub fn slice_convex<V: Vertex>(
 }
 
 /// Trait to be implemented by vertices for slicing
-pub trait Vertex: Clone + Sized {
+pub trait Vertex: Sized {
+    /// Creates a new vertex that will lie between the two given ones where t is a value between 0.0 and 1.0.
+    /// This will be called to create the vertices that lie on the cutting plane where the mesh intersects with the plane.
     fn new_interpolated(a: &Self, b: &Self, t: f32) -> Self;
 
+    /// Create a new vertex from the given position, uv and normal.
+    /// This is solely used when constructing the cross section and will therefor be called twice per vertex
+    /// with opposing normals.
     fn new(pos: [f32; 3], uv: [f32; 2], normal: [f32; 3]) -> Self;
 
+    /// Retrieves the position of this vertex.
     fn pos(&self) -> [f32; 3];
-
-    fn flip_normal(&mut self);
 }
+
+/*
+pub trait VertexConstructor<V> {
+    fn vertex(&mut self, pos: [f32; 3], uv: [f32; 2], normal: [f32; 3]) -> V;
+    fn interpolated(&mut self, a: &V, b: &V, t: f32) -> V;
+}
+
+impl<V, VB: VertexConstructor<V>> VertexConstructor<V> for &mut VB {
+    fn vertex(&mut self, pos: [f32; 3], uv: [f32; 2], normal: [f32; 3]) -> V {
+        VB::vertex(self, pos, uv, normal)
+    }
+
+    fn interpolated(&mut self, a: &V, b: &V, t: f32) -> V {
+        VB::interpolated(self, a, b, t)
+    }
+}
+*/

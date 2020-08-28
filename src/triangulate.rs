@@ -1,7 +1,5 @@
-use crate::{
-    math::{cross, div_v2, dot_v3, normalized, sub_v2},
-    Plane, TextureBounds, Triangle, Vertex,
-};
+use crate::math::{cross, div_v2, dot_v3, negate_v3, normalized, sub_v2};
+use crate::{Plane, TextureBounds, Triangle, Vertex};
 
 /// monotone chain algorithm to calculate the convex hull of the vertices
 fn monotone_chain<V: Clone>(mut vertices: Vec<(V, [f32; 2])>) -> Vec<(V, [f32; 2])> {
@@ -95,22 +93,25 @@ fn map_to_2d_with_bb<V: Vertex>(
     )
 }
 
-/// generate the cross section mesh from the intersection points
-pub fn triangulate<V: Vertex>(
+/// generate the cross section mesh from the intersection points twice, for each side
+#[allow(clippy::type_complexity)]
+pub fn triangulate<V: Vertex + Clone>(
     vertices: Vec<V>,
     plane: Plane,
     tb: &TextureBounds,
-) -> Option<Vec<Triangle<V>>> {
+) -> Option<(Vec<Triangle<V>>, Vec<Triangle<V>>)> {
     if vertices.len() < 3 {
         return None;
     }
 
     let plane_normal = plane.normal();
+    let neg_plane_normal = negate_v3(plane.normal());
     let (bounding_box, mapped) = map_to_2d_with_bb(plane, vertices);
 
     let mut hull = monotone_chain(mapped);
 
-    let mut triangles = Vec::with_capacity(hull.len() - 2);
+    let mut lower_cross = Vec::with_capacity(hull.len() - 2);
+    let mut upper_cross = Vec::with_capacity(hull.len() - 2);
 
     let BoundingBox {
         x,
@@ -121,20 +122,28 @@ pub fn triangulate<V: Vertex>(
     let max = [width, height];
     let min = [x, y];
     let tb_map = tb.mapper();
-    let p = {
+    let (c, uvc) = {
         let (v, uv) = hull.pop().unwrap();
-        V::new(v.pos(), tb_map(div_v2(sub_v2(uv, min), max)), plane_normal)
+        (v.pos(), tb_map(div_v2(sub_v2(uv, min), max)))
     };
     // FIXME: const generic slice functions
     for vertices in hull.windows(2) {
         let &(ref a, uva) = &vertices[0];
         let &(ref b, uvb) = &vertices[1];
-        triangles.push(Triangle::new(
-            V::new(a.pos(), tb_map(div_v2(sub_v2(uva, min), max)), plane_normal),
-            V::new(b.pos(), tb_map(div_v2(sub_v2(uvb, min), max)), plane_normal),
-            p.clone(),
+        let (a, uva) = (a.pos(), tb_map(div_v2(sub_v2(uva, min), max)));
+        let (b, uvb) = (b.pos(), tb_map(div_v2(sub_v2(uvb, min), max)));
+        upper_cross.push(Triangle::new(
+            V::new(a, uva, plane_normal),
+            V::new(b, uvb, plane_normal),
+            V::new(c, uvc, plane_normal),
+        ));
+        // reversed winding order and normal
+        lower_cross.push(Triangle::new(
+            V::new(a, uva, neg_plane_normal),
+            V::new(c, uvc, neg_plane_normal),
+            V::new(b, uvb, neg_plane_normal),
         ));
     }
 
-    Some(triangles)
+    Some((lower_cross, upper_cross))
 }

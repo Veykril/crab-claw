@@ -1,9 +1,8 @@
-use crate::{
-    math::{dot_v3, sub_v3},
-    plane::Side,
-    Plane, Vertex, EPSILON,
-};
 use arrayvec::ArrayVec;
+
+use crate::math::{dot_v3, sub_v3};
+use crate::plane::Side;
+use crate::{Plane, Vertex, EPSILON};
 
 /// Result of an triangle intersection
 pub(crate) struct TriangleSplit<V> {
@@ -26,21 +25,10 @@ impl<V: Vertex> Triangle<V> {
     pub fn new(a: V, b: V, c: V) -> Self {
         Triangle { a, b, c }
     }
-
-    /// Reverses the winding order of this triangle
-    pub(crate) fn reverse_winding(&mut self) {
-        std::mem::swap(&mut self.b, &mut self.c);
-    }
-
-    pub(crate) fn flip_normals(&mut self) {
-        self.a.flip_normal();
-        self.b.flip_normal();
-        self.c.flip_normal();
-    }
 }
 
 // clean this up
-pub(crate) fn intersect_triangle<V: Vertex>(
+pub(crate) fn intersect_triangle<V: Vertex + Clone>(
     plane: Plane,
     triangle: Triangle<V>,
 ) -> Option<TriangleSplit<V>> {

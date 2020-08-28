@@ -5,7 +5,6 @@ authors = ["Lukas Wirth <lukastw97@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-euclid = "0.22.1"
 arrayvec = "0.5.1"
 
 [dev-dependencies]
